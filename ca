@@ -1,0 +1,67 @@
+#!/usr/bin/env lua
+
+concat = table.concat
+format = string.format
+ntype  = math.type
+
+local function printf(fmt, ...)
+    print(format(fmt, ...))     
+end
+
+local function err_cause_msg(err_msg)
+    return err_msg:match(":.*: (.*)")
+end
+
+local function cmdline_compat_to_lua(expr_str)
+    return expr_str:gsub("%[", "("):gsub("%]", ")"):gsub("@", "*")
+end
+
+-- Parse arguments
+local special_notation = nil
+
+local expr_start = 1
+for idx,carg in ipairs(arg) do
+    if carg:sub(1, 1) == '-' then
+        expr_start = expr_start + 1
+        if carg == '-s' then special_notation = "scientific" end
+        if carg == '-p' then special_notation = "percentage" end
+    else
+        break
+    end
+end
+
+-- Prepare the expression
+local expr_str = concat(arg, "", expr_start)
+expr_str = cmdline_compat_to_lua(expr_str)
+--printf("expr_str: %s", expr_str)
+
+local env = math
+env.rand = math.random
+local expr, err = load(format("return %s", expr_str), nil, "t", env)
+if (err ~= nil) then
+    printf("Error: %s", err_cause_msg(err))
+    return 1
+end
+
+-- Execute the expression
+local ok, res = pcall(expr)
+if not ok then
+    printf("Error: %s", err_cause_msg(res))
+    return 1
+end
+
+if res == nil then
+    print(nil)
+elseif special_notation ~= nil then
+    if special_notation == "scientific" then
+        printf("%e", res)
+    elseif special_notation == "percentage" then
+        printf("%f", res * 100)
+    end
+elseif ntype(res) == "integer" then
+    printf("%d", res)
+else
+    printf("%s", res)
+end
+
+return 0
